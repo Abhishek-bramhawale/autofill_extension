@@ -1,5 +1,5 @@
 {
-    "manifest_version": 1,
+    "manifest_version": 3,
     "name": "Autofill Forms Extension",
     "version": "1.0.0",
     "description": "form autofill tool that works with all types of Forms supporting all websites",
@@ -16,7 +16,7 @@
     ],
     
     "action": {
-      "default_popup": "popup/dist/index.html",
-      "default_title": "Smart Autofill"
+      "default_popup": "mainUi/dist/index.html",
+      "default_title": "Autofill Forms"
     }
   }
