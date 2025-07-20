@@ -1,6 +1,50 @@
 import './App.css'
 
+import { useEffect, useState } from "react";
+
 function App() {
+
+  const [form, setForm] = useState({ 
+    name: "", 
+    phone: "",
+    city: "",
+    email: "" 
+    
+   
+  });
+
+  const [status, setStatus] = useState("");
+  const [isAutofilling, setIsAutofilling] = useState(false);
+
+  useEffect(() => {
+    if (window.chrome?.storage?.local) {
+      window.chrome.storage.local.get([
+        "name", "phone", "city", "email"], (result) => {
+        setForm({
+          name: result.name || "",
+          phone: result.phone || "",
+          city: result.city || "",
+          email: result.email || "",
+          
+        });
+      });
+    }
+  }, []);
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (window.chrome?.storage?.local) {
+      window.chrome.storage.local.set(form, () => {
+        setStatus("Data saved successfully!");
+        setTimeout(() => setStatus(""), 2000);
+      });
+    }
+  };
+
   return (
     <div className="autofill_container">
       <div className="autofill_header">
@@ -43,7 +87,7 @@ function App() {
             Phone
           </label>
           <input
-            type="number"
+            type="tel"
             name="phone"
             placeholder="Enter your phone number"
             autoComplete="off"
