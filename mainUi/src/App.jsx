@@ -38,17 +38,43 @@ function App() {
           />
         </div>
 
+        <div className="autofill_form_group">
+          <label className="autofill_label">
+            Phone
+          </label>
+          <input
+            type="number"
+            name="phone"
+            placeholder="Enter your phone number"
+            autoComplete="off"
+            className="autofill_input"
+          />
+        </div>
+
+        <div className="autofill_form_group">
+          <label className="autofill_label">
+            email
+          </label>
+          <input
+            type="email"
+            name="email"
+            placeholder="Enter your email address"
+            autoComplete="off"
+            className="autofill_input"
+          />
+        </div>
+
         <div className="autofill_button_row">
-          <button className="btn">
+          <button className="autofill_save_btn btn">
             Save
           </button>
-          <button className="btn">
+          <button className="autofill_autofill_btn btn">
             Autofill info 
           </button>
         </div>
 
         <button className="btn">
-          🗑️ Clear fields
+        Clear fields
         </button>
       </div>
 

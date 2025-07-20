@@ -105,15 +105,19 @@ body {
 
 .autofill_form_group {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
 }
 
 .autofill_label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #e0e0e0;
-  margin-bottom: 7px;
-  letter-spacing: 0.04em;
+  margin-bottom: 0;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.autofill_input {
+  flex: 1;
 }
 
 .autofill_input {
@@ -138,9 +142,14 @@ body {
   display: flex;
   gap: 10px;
   margin-top: 22px;
+  width: 100%;
 }
 
-.autofill_save_btn, .autofill_autofill_btn {
+.autofill_save_btn,
+.autofill_autofill_btn {
+  flex: 1 1 0;
+  width: 50%;
+  box-sizing: border-box;
   padding: 13px 0;
   border-radius: 7px;
   border: none;
@@ -153,19 +162,14 @@ body {
 }
 
 .autofill_save_btn {
-  flex: 1;
   /* background: linear-gradient(90deg, #ff6a6a 0%, #ff8c8c 100%);
   color: #fff; */
 
   
 }
-.autofill_save_btn:hover {
-  /* background: linear-gradient(90deg, #ff8c8c 0%, #ff6a6a 100%);
-  transform: translateY(-2px); */
-}
+
 
 .autofill_autofill_btn {
-  flex: 2;
   /* background: linear-gradient(90deg, #6a82fb 0%, #fc5c7d 100%);
   color: #fff; */
 }
