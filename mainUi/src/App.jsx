@@ -37,10 +37,66 @@ function App() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    let chromeSaved = false;
+    let localSaved = false;
     if (window.chrome?.storage?.local) {
       window.chrome.storage.local.set(form, () => {
-        setStatus("Data saved successfully!");
-        setTimeout(() => setStatus(""), 2000);
+        chromeSaved = true;
+        if (localSaved) {
+          window.alert("Data saved successfully!");
+        }
+      });
+    }
+    localStorage.setItem('autofillDetails', JSON.stringify(form));
+    localSaved = true;
+    if (!window.chrome?.storage?.local || chromeSaved) {
+      window.alert("Data saved successfully!");
+    }
+  };
+
+  const contentScriptCode = `
+function fillFields(data) {
+  if (data.name) document.querySelectorAll('input[name="name"]').forEach(el => el.value = data.name);
+  if (data.city) document.querySelectorAll('input[name="city"]').forEach(el => el.value = data.city);
+  if (data.phone) document.querySelectorAll('input[name="phone"]').forEach(el => el.value = data.phone);
+  if (data.email) document.querySelectorAll('input[name="email"]').forEach(el => el.value = data.email);
+}
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === 'AUTOFILL') {
+    chrome.storage.local.get(['name', 'city', 'phone', 'email'], (data) => {
+      fillFields(data);
+      sendResponse({status: 'done'});
+    });
+    return true;
+  }
+});
+`;
+
+  const injectContentScript = () => {
+    if (window.chrome?.tabs && window.chrome?.scripting) {
+      window.chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        if (tabs[0]?.id) {
+          window.chrome.scripting.executeScript({
+            target: {tabId: tabs[0].id},
+            func: () => {}, 
+          }, () => {
+            window.chrome.scripting.executeScript({
+              target: {tabId: tabs[0].id},
+              func: new Function(contentScriptCode),
+            });
+          });
+        }
+      });
+    }
+  };
+
+  const handlePopupAutofill = () => {
+    if (window.chrome?.tabs) {
+      window.chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        if (tabs[0]?.id) {
+          window.chrome.tabs.sendMessage(tabs[0].id, {type: 'AUTOFILL', data: form});
+        }
       });
     }
   };
@@ -56,7 +112,7 @@ function App() {
         </p>
       </div>
 
-      <div className="autofill_form_fields">
+      <form className="autofill_form_fields" onSubmit={handleSubmit}>
         <div className="autofill_form_group">
           <label className="autofill_label">
             Name
@@ -67,6 +123,8 @@ function App() {
             placeholder="Enter your name"
             autoComplete="off"
             className="autofill_input"
+            value={form.name}
+            onChange={handleChange}
           />
         </div>
         <div className="autofill_form_group">
@@ -79,6 +137,8 @@ function App() {
             placeholder="Enter your city"
             autoComplete="off"
             className="autofill_input"
+            value={form.city}
+            onChange={handleChange}
           />
         </div>
 
@@ -92,6 +152,8 @@ function App() {
             placeholder="Enter your phone number"
             autoComplete="off"
             className="autofill_input"
+            value={form.phone}
+            onChange={handleChange}
           />
         </div>
 
@@ -105,22 +167,24 @@ function App() {
             placeholder="Enter your email address"
             autoComplete="off"
             className="autofill_input"
+            value={form.email}
+            onChange={handleChange}
           />
         </div>
 
         <div className="autofill_button_row">
-          <button className="autofill_save_btn btn">
+          <button className="autofill_save_btn btn" type="submit">
             Save
           </button>
-          <button className="autofill_autofill_btn btn">
-            Autofill info 
-          </button>
         </div>
+        <button className="btn" type="button" onClick={handlePopupAutofill} style={{marginTop: 10}}>
+  Autofill this page
+</button>
 
-        <button className="btn">
-        Clear fields
+        <button className="btn" type="button">
+          Clear fields
         </button>
-      </div>
+      </form>
 
       <div className="autofill_tip_box">
         <p className="autofill_tip_text">
