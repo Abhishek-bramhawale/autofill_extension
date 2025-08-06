@@ -1,51 +1,96 @@
 // alert('Content script loaded!');
 
-function fillSimpleAutofillFields(data) {
+function fillMappedAutofillFields(data) {
   let filled = 0;
-  // console.log('Autofill: Received data:', data);
-  // alert('Autofill: Received data: ' + JSON.stringify(data));
-  if (data.name) {
-    const nameInputs = document.querySelectorAll('input[name="name"]');
-    // console.log('Autofill: Found', nameInputs.length, 'name inputs');
-    // alert('Autofill: Found ' + nameInputs.length + ' name inputs');
-    nameInputs.forEach(el => {
-      el.value = data.name;
-      ['input', 'change', 'blur'].forEach(eventType => {
-        el.dispatchEvent(new Event(eventType, { bubbles: true }));
+  
+  Object.entries(data).forEach(([fieldName, value]) => {
+    const selectors = [
+      `input[name="${fieldName}"]`, `input[id="${fieldName}"]`,
+      `textarea[name="${fieldName}"]`, `textarea[id="${fieldName}"]`,
+      `select[name="${fieldName}"]`, `select[id="${fieldName}"]`,
+      `input[class*="${fieldName}"]`, `textarea[class*="${fieldName}"]`,
+      `input[placeholder*="${fieldName}"]`, `textarea[placeholder*="${fieldName}"]`
+    ];
+    
+    let inputs = document.querySelectorAll(selectors.join(', '));
+    
+    if (inputs.length === 0) {
+      const allInputs = document.querySelectorAll('input, textarea, select');
+      inputs = Array.from(allInputs).filter(input => {
+        let labelText = '';
+        if (input.id) {
+          const label = document.querySelector(`label[for="${input.id}"]`);
+          if (label) labelText = label.textContent.toLowerCase();
+        }
+        if (!labelText) {
+          const parentLabel = input.closest('label');
+          if (parentLabel) labelText = parentLabel.textContent.toLowerCase();
+        }
+        return labelText.includes(fieldName.toLowerCase()) || fieldName.toLowerCase().includes(labelText);
       });
-      filled++;
-      // console.log('Autofill: Filled name input with', data.name);
-      // alert('Autofill: Filled name input with ' + data.name);
+    }
+    
+    inputs.forEach(el => {
+      if (!el.value?.trim()) {
+        el.value = value;
+        ['input', 'change', 'blur'].forEach(eventType => {
+          el.dispatchEvent(new Event(eventType, { bubbles: true }));
+        });
+        filled++;
+      }
     });
-  }
-  // if (data.age) {
-
-  if (data.city) {
-    const cityInputs = document.querySelectorAll('input[name="city"]');
-    // console.log('Autofill: Found', cityInputs.length, 'city inputs');
-    // alert('Autofill: Found ' + cityInputs.length + ' city inputs');
-    cityInputs.forEach(el => {
-      el.value = data.city;
-      ['input', 'change', 'blur'].forEach(eventType => {
-        el.dispatchEvent(new Event(eventType, { bubbles: true }));
-      });
-      filled++;
-      // console.log('Autofill: Filled city input with', data.city);
-      // alert('Autofill: Filled city input with ' + data.city);
-    });
-  }
-  // alert('Autofill: Total fields filled: ' + filled);
-  // console.log('Autofill: Total fields filled:', filled);
+  });
+  
   return filled;
 }
 
+function getFormFieldsMetadata() {
+  const inputs = document.querySelectorAll('input, select, textarea');
+  return Array.from(inputs).map(input => {
+    let label = '';
+    if (input.id) {
+      const labelEl = document.querySelector(`label[for="${input.id}"]`);
+      if (labelEl) label = labelEl.innerText;
+    }
+    if (!label) {
+      const parentLabel = input.closest('label');
+      if (parentLabel) label = parentLabel.innerText;
+    }
+    
+    return {
+      name: input.name || '',
+      id: input.id || '',
+      placeholder: input.placeholder || '',
+      label: label.replace(/\s+/g, ' ').trim(),
+      type: input.type || 'text'
+    };
+  });
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // console.log('Autofill: Message received', message);
-  // alert('Autofill: Message received: ' + JSON.stringify(message));
-  if (message.type === 'AUTOFILL' && message.data) {
-    const filled = fillSimpleAutofillFields(message.data);
-    sendResponse({ success: true, filledFields: filled });
-    // alert('Autofill: Done, fields filled: ' + filled);
+  if (message.type === 'TEST') {
+    sendResponse({ success: true, message: 'Content script is working' });
     return true;
   }
+  
+  if (message.type === 'AUTOFILL' && message.data) {
+    const isAIMapped = message.data && Object.keys(message.data).some(key => 
+      key.includes('-') || key.includes('_') || key.length > 10
+    );
+    
+    const filled = fillMappedAutofillFields(message.data);
+    sendResponse({ 
+      success: true, 
+      filledFields: filled,
+      method: isAIMapped ? 'ai-mapped' : 'direct-matching'
+    });
+    return true;
+  }
+  
+  if (message.type === 'GET_FIELDS_METADATA') {
+    sendResponse({ fields: getFormFieldsMetadata() });
+    return true;
+  }
+  
+  return false;
 }); 
