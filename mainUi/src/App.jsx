@@ -37,37 +37,69 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
   };
 
   
-const handleAutofill=() =>{
-  if (window.chrome?.tabs) {
-    window.chrome.tabs.query({active: true, currentWindow: true}, (tabs) =>{
-      if (tabs[0]?.id) {
-        window.chrome.tabs.sendMessage(tabs[0].id, {
-          type: 'AUTOFILL',
-          data: form
-        });
-      }
-    });
+const handleAutofill = async () =>{
+  if (!window.chrome?.tabs) {
+    setStatus("Chrome extension API not available");
+    return;
   }
+
+  setStatus("Preparing autofill...");
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) {
+      setStatus("current tab not accessible");
+      return;
+    }
+
+    if (
+      tab.url.startsWith('chrome://') ||
+      tab.url.startsWith('chrome-extension://') ||
+      tab.url.startsWith('edge://') ||
+      tab.url.startsWith('about:')
+    ) {
+      setStatus("Cannot autofill on browser pages");
+      return;
+    }
+
+    setStatus("🔍 Step 1: Filling direct matches...");
+    let directFilledCount = 0;
+
+    try {
+      const response = await chrome.tabs.sendMessage(tab.id, { type: "AUTOFILL", data: form });
+      if (response?.success) {
+        directFilledCount = response.filledFields || 0;
+        if (directFilledCount > 0)
+          setStatus(`Step 1: Filled ${directFilledCount} field(s) with direct matching`);
+        else
+          setStatus("No direct field matches found.");
+      }
+    } catch {
+      try {
+        const result = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: directAutofill,
+          args: [form],
+        });
+        if (result?.[0]?.result) {
+          directFilledCount = result[0].result.filledFields || 0;
+          setStatus(`Step 1: Filled ${directFilledCount} field(s) with direct injection`);
+        }
+      } catch (error) {
+        console.error('Direct injection failed:', error);
+        setStatus("Direct autofill failed");
+      }
+    }
+
+    
+
+  } catch (error) {
+    console.error('Autofill error:', error);
+    setStatus("Autofill failed. Please refresh the page and try again.");
+  }
+
+  setTimeout(() => setStatus(""), 4000);
 };
 
-  const contentScriptCode=`
-function fillFields(data) {
-  if (data.name) document.querySelectorAll('input[name="name"]').forEach(el => el.value=data.name);
-  if (data.city) document.querySelectorAll('input[name="city"]').forEach(el => el.value=data.city);
-  if (data.phone) document.querySelectorAll('input[name="phone"]').forEach(el => el.value=data.phone);
-  if (data.email) document.querySelectorAll('input[name="email"]').forEach(el => el.value=data.email);
-}
-
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) =>{
-  if (request.type === 'AUTOFILL') {
-    chrome.storage.local.get(['name', 'city', 'phone', 'email'], (data) =>{
-      fillFields(data);
-      sendResponse({status: 'done'});
-    });
-    return true;
-  }
-});
-`;
 
   const injectContentScript=() =>{
     if (window.chrome?.tabs && window.chrome?.scripting) {
