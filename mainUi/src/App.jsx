@@ -120,90 +120,39 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) =>{
     }
   };
 
-  return (
+ return (
     <div className="autofill_container">
       <div className="autofill_header">
-        <h2 className="autofill_title">
-          Autofill forms
-        </h2>
-        <p className="autofill_subtitle">
-          Works with all types of Forms & on all websites
-        </p>
+        <h2 className="autofill_title">Autofill forms</h2>
+        <p className="autofill_subtitle">Works with all types of Forms & on all websites</p>
       </div>
 
       <form className="autofill_form_fields" onSubmit={handleSubmit}>
-        <div className="autofill_form_group">
-          <label className="autofill_label">
-            Name
-          </label>
-          <input
-            type="text"
-            name="name"
-            placeholder="Enter your name"
-            autoComplete="off"
-            className="autofill_input"
-            value={form.name}
-            onChange={handleChange}
-          />
-        </div>
-        <div className="autofill_form_group">
-          <label className="autofill_label">
-            City
-          </label>
-          <input
-            type="text"
-            name="city"
-            placeholder="Enter your city"
-            autoComplete="off"
-            className="autofill_input"
-            value={form.city}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="autofill_form_group">
-          <label className="autofill_label">
-            Phone
-          </label>
-          <input
-            type="tel"
-            name="phone"
-            placeholder="Enter your phone number"
-            autoComplete="off"
-            className="autofill_input"
-            value={form.phone}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="autofill_form_group">
-          <label className="autofill_label">
-            email
-          </label>
-          <input
-            type="email"
-            name="email"
-            placeholder="Enter your email address"
-            autoComplete="off"
-            className="autofill_input"
-            value={form.email}
-            onChange={handleChange}
-          />
-        </div>
+        {FORM_FIELDS.map(field => (
+          <div key={field} className="autofill_form_group">
+            <label className="autofill_label">{field.charAt(0).toUpperCase() + field.slice(1)}</label>
+            <input
+              type={FIELD_CONFIG[field].type}
+              name={field}
+              placeholder={FIELD_CONFIG[field].placeholder}
+              autoComplete="off"
+              className="autofill_input"
+              value={form[field]}
+              onChange={handleChange}
+            />
+          </div>
+        ))}
 
         <div className="autofill_button_row">
-          <button className="autofill_save_btn btn" type="submit">
-            Save
-          </button>
+          <button className="autofill_save_btn btn" type="submit">Save</button>
         </div>
-        <button className="btn" type="button" onClick={handlePopupAutofill} style={{marginTop: 10}}>
-  Autofill this page
-</button>
-
-        <button className="btn" type="button">
-          Clear fields
+        <button className="btn" type="button" onClick={handleAutofill} style={{marginTop: 10}}>
+          Autofill this page
         </button>
+        <button className="btn" type="button" onClick={handleClearData}>Clear fields</button>
       </form>
+
+      {status && <div style={getStatusStyle(status)}>{status}</div>}
 
       <div className="autofill_tip_box">
         <p className="autofill_tip_text">
@@ -211,7 +160,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) =>{
         </p>
       </div>
     </div>
-  )
+  );
 }
 
 function directAutofill(formData) {
