@@ -36,69 +36,189 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
     if (!window.chrome?.storage?.local) window.alert("Data saved successfully!");
   };
 
-  
-const handleAutofill = async () =>{
-  if (!window.chrome?.tabs) {
-    setStatus("Chrome extension API not available");
-    return;
-  }
-
-  setStatus("Preparing autofill...");
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) {
-      setStatus("current tab not accessible");
+   const handleAutofill = async () => {
+    if (!window.chrome?.tabs) {
+      setStatus("Chrome extension API not available");
       return;
     }
 
-    if (
-      tab.url.startsWith('chrome://') ||
-      tab.url.startsWith('chrome-extension://') ||
-      tab.url.startsWith('edge://') ||
-      tab.url.startsWith('about:')
-    ) {
-      setStatus("Cannot autofill on browser pages");
-      return;
-    }
-
-    setStatus("🔍 Step 1: Filling direct matches...");
-    let directFilledCount = 0;
-
+    setStatus("Preparing autofill...");
     try {
-      const response = await chrome.tabs.sendMessage(tab.id, { type: "AUTOFILL", data: form });
-      if (response?.success) {
-        directFilledCount = response.filledFields || 0;
-        if (directFilledCount > 0)
-          setStatus(`Step 1: Filled ${directFilledCount} field(s) with direct matching`);
-        else
-          setStatus("No direct field matches found.");
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) {
+        setStatus("Could not access current tab");
+        return;
       }
-    } catch {
+
+      if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || 
+          tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
+        setStatus("Cannot autofill on browser pages");
+        return;
+      }
+
+      setStatus("Step 1: Filling direct matches...");
+      let directFilledCount = 0;
+      
       try {
-        const result = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: directAutofill,
-          args: [form],
-        });
-        if (result?.[0]?.result) {
-          directFilledCount = result[0].result.filledFields || 0;
-          setStatus(`Step 1: Filled ${directFilledCount} field(s) with direct injection`);
+        const response = await chrome.tabs.sendMessage(tab.id, { type: "AUTOFILL", data: form });
+        if (response?.success) {
+          directFilledCount = response.filledFields || 0;
+          if (directFilledCount > 0) setStatus(`Step 1: Filled ${directFilledCount} field(s) with direct matching`);
         }
-      } catch (error) {
-        console.error('Direct injection failed:', error);
-        setStatus("Direct autofill failed");
+      } catch {
+        try {
+          const result = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: directAutofill,
+            args: [form]
+          });
+          if (result?.[0]?.result) {
+            directFilledCount = result[0].result.filledFields || 0;
+            setStatus(`Step 1: Filled ${directFilledCount} field(s) with direct injection`);
+          }
+        } catch (error) {
+          console.error('Direct injection failed:', error);
+        }
       }
+
+      setStatus("Step 2: Using AI for remaining fields...");
+      await tryAIAutofillForRemaining(tab.id, directFilledCount);
+    } catch (error) {
+      console.error('Autofill error:', error);
+      setStatus("Autofill failed. Please refresh the page and try again.");
     }
+    setTimeout(() => setStatus(""), 4000);
+  };
 
-    
+  const tryAIAutofillForRemaining = async (tabId, directFilledCount) => {
+    try {
+      setStatus("Getting form field metadata...");
+      const result = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+          const inputs = document.querySelectorAll('input, select, textarea');
+          return Array.from(inputs).map(input => {
+            let label = '';
+            if (input.id) {
+              const labelEl = document.querySelector(`label[for="${input.id}"]`);
+              if (labelEl) label = labelEl.innerText;
+            }
+            if (!label) {
+              const parentLabel = input.closest('label');
+              if (parentLabel) label = parentLabel.textContent;
+            }
+            return {
+              name: input.name || '',
+              id: input.id || '',
+              placeholder: input.placeholder || '',
+              label: label.replace(/\s+/g, ' ').trim(),
+              type: input.type || 'text'
+            };
+          });
+        }
+      });
+      
+      if (!result?.[0]?.result?.length) {
+        setStatus("No form fields found on this page");
+        return;
+      }
+      
+      setStatus(`Analyzing ${result[0].result.length} form fields with AI...`);
+      const mapping = await getAIFieldMapping(result[0].result);
+      
+      if (mapping && Object.keys(mapping).length > 0) {
+        setStatus("AI mapping successful, filling remaining fields...");
+        const aiData = Object.fromEntries(
+          Object.entries(mapping).map(([fieldName, standardKey]) => [fieldName, form[standardKey] || ''])
+        );
 
-  } catch (error) {
-    console.error('Autofill error:', error);
-    setStatus("Autofill failed. Please refresh the page and try again.");
-  }
+        try {
+          const fillResult = await chrome.scripting.executeScript({
+            target: { tabId },
+            func: (aiData) => {
+              let filled = 0;
+              Object.entries(aiData).forEach(([fieldName, value]) => {
+                const selectors = [
+                  `input[name="${fieldName}"]`, `input[id="${fieldName}"]`,
+                  `textarea[name="${fieldName}"]`, `textarea[id="${fieldName}"]`
+                ];
+                let inputs = document.querySelectorAll(selectors.join(', '));
+                
+                if (inputs.length === 0) {
+                  const allInputs = document.querySelectorAll('input, textarea, select');
+                  inputs = Array.from(allInputs).filter(input => {
+                    let labelText = '';
+                    if (input.id) {
+                      const label = document.querySelector(`label[for="${input.id}"]`);
+                      if (label) labelText = label.textContent.toLowerCase();
+                    }
+                    if (!labelText) {
+                      const parentLabel = input.closest('label');
+                      if (parentLabel) labelText = parentLabel.textContent.toLowerCase();
+                    }
+                    return labelText.includes(fieldName.toLowerCase()) || fieldName.toLowerCase().includes(labelText);
+                  });
+                }
+                
+                inputs.forEach(el => {
+                  if (!el.value?.trim()) {
+                    el.value = value;
+                    ['input', 'change', 'blur'].forEach(eventType => {
+                      el.dispatchEvent(new Event(eventType, { bubbles: true }));
+                    });
+                    filled++;
+                  }
+                });
+              });
+              return filled;
+            },
+            args: [aiData]
+          });
+          
+          const aiFilledCount = fillResult[0]?.result || 0;
+          const totalFilled = directFilledCount + aiFilledCount;
+          
+          if (aiFilledCount > 0) {
+            setStatus(`Complete! Direct: ${directFilledCount}, AI: ${aiFilledCount} = ${totalFilled} total fields filled`);
+          } else {
+            setStatus(`Complete! Direct matching filled ${directFilledCount} field(s), AI found no additional matches`);
+          }
+        } catch (error) {
+          console.error('AI field filling failed:', error);
+          setStatus(`Complete! Direct matching filled ${directFilledCount} field(s), AI filling failed`);
+        }
+      } else {
+        setStatus(`Complete! Direct matching filled ${directFilledCount} field(s), AI found no additional mappings`);
+      }
+    } catch (error) {
+      console.error('AI autofill error:', error);
+      setStatus(`Complete! Direct matching filled ${directFilledCount} field(s), AI analysis failed`);
+    }
+  };
 
-  setTimeout(() => setStatus(""), 4000);
-};
+  const getAIFieldMapping = async (fields) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const res = await fetch('http://localhost:3001/api/map-fields', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      return JSON.parse(await res.text());
+    } catch (error) {
+      if (error.name === 'AbortError') return null;
+      console.log('AI request failed:', error);
+      return null;
+    }
+  };
+
+  
+
 
 
   const injectContentScript=() =>{
