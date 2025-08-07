@@ -36,7 +36,13 @@ Example output:
   "user_email": "email"
 }
 
-Note: Map the actual field name/id, not the label text. If a field has no name/id, use the label text as the key.
+Important rules:
+1. Map the actual field name/id, not the label text
+2. If a field has no name/id, use the label text as the key
+3. For Google Forms entry IDs (like "entry.1045781291"), map based on the label text, not the entry ID
+4. Only return mappings that are clearly correct - skip uncertain ones
+5. Do not include null, undefined, or empty values
+6. Focus on the most obvious matches only
 `;
 
   try {

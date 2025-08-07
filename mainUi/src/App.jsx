@@ -17,23 +17,68 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
 
   useEffect(() =>{
     if (window.chrome?.storage?.local) {
-      window.chrome.storage.local.get(FORM_FIELDS, (result) =>{
-        setForm(Object.fromEntries(FORM_FIELDS.map(field => [field, result[field] || ''])));
+      window.chrome.storage.local.get(null, (result) =>{
+        const savedForm = {};
+        
+        FORM_FIELDS.forEach(field => {
+          savedForm[field] = result[field] || '';
+        });
+        
+        Object.keys(result).forEach(key => {
+          if (!FORM_FIELDS.includes(key) && key !== 'formFields') {
+            savedForm[key] = result[key] || '';
+          }
+        });
+        
+        setForm(savedForm);
       });
     }
   }, []);
 
   const handleChange=(e) =>{
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const newValue = e.target.value;
+    setForm({ ...form, [e.target.name]: newValue });
+    
+    if (window.chrome?.storage?.local) {
+      window.chrome.storage.local.set({ [e.target.name]: newValue });
+    }
   };
 
   const handleSubmit=(e) =>{
     e.preventDefault();
     if (window.chrome?.storage?.local) {
-      window.chrome.storage.local.set(form, () => window.alert("Data saved successfully!"));
+      const dataToSave = {};
+      Object.keys(form).forEach(key => {
+        dataToSave[key] = form[key];
+      });
+      window.chrome.storage.local.set(dataToSave, () => window.alert("Data saved successfully!"));
     }
     localStorage.setItem('autofillDetails', JSON.stringify(form));
     if (!window.chrome?.storage?.local) window.alert("Data saved successfully!");
+  };
+
+  const addNewField = () => {
+    const fieldName = prompt("Enter field name (e.g., address, zipcode, company):");
+    if (fieldName && fieldName.trim()) {
+      const cleanFieldName = fieldName.trim().toLowerCase();
+      setForm(prev => ({ ...prev, [cleanFieldName]: "" }));
+      
+      if (window.chrome?.storage?.local) {
+        window.chrome.storage.local.set({ [cleanFieldName]: "" });
+      }
+    }
+  };
+
+  const removeField = (fieldName) => {
+    if (confirm(`Remove field "${fieldName}"?`)) {
+      const newForm = { ...form };
+      delete newForm[fieldName];
+      setForm(newForm);
+      
+      if (window.chrome?.storage?.local) {
+        window.chrome.storage.local.remove(fieldName);
+      }
+    }
   };
 
    const handleAutofill = async () => {
@@ -81,7 +126,7 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
         }
       }
 
-      setStatus("Step 2: Using AI for remaining fields...");
+      setStatus("Step 2: Using AI as fallback for remaining fields...");
       await tryAIAutofillForRemaining(tab.id, directFilledCount);
     } catch (error) {
       console.error('Autofill error:', error);
@@ -90,9 +135,202 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
     setTimeout(() => setStatus(""), 4000);
   };
 
-  const tryAIAutofillForRemaining = async (tabId, directFilledCount) => {
+    const tryAIAutofillForRemaining = async (tabId, directFilledCount) => {
     try {
-      setStatus("Getting form field metadata...");
+      setStatus("Trying direct matching for remaining fields...");
+      const directResult = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: (formData) => {
+          let filled = 0;
+          const allInputs = document.querySelectorAll('input, textarea, select');
+          
+          console.log('=== GOOGLE FORM FIELD ANALYSIS ===');
+          console.log('Total inputs found:', allInputs.length);
+          
+          let googleFormsData = null;
+          try {
+            if (window.FB_PUBLIC_LOAD_DATA_) {
+              googleFormsData = window.FB_PUBLIC_LOAD_DATA_;
+              console.log('Found Google Forms metadata:', googleFormsData);
+            }
+          } catch (e) {
+            console.log('Could not access FB_PUBLIC_LOAD_DATA_');
+          }
+          
+          const fieldMapping = {};
+          if (googleFormsData && googleFormsData[1] && googleFormsData[1][1]) {
+            const formFields = googleFormsData[1][1];
+            formFields.forEach(field => {
+              if (field && field[0] && field[1]) {
+                const fieldId = field[0];
+                const fieldTitle = field[1];
+                fieldMapping[`entry.${fieldId}`] = fieldTitle.toLowerCase();
+                console.log(`Mapped entry.${fieldId} -> "${fieldTitle}"`);
+              }
+            });
+          } else {
+            console.log('Could not parse Google Forms metadata structure');
+          }
+          
+          allInputs.forEach((input, index) => {
+            console.log(`\n--- Field ${index + 1} ---`);
+            console.log('Input element:', input);
+            console.log('Type:', input.type);
+            console.log('Name:', input.name);
+            console.log('ID:', input.id);
+            console.log('Placeholder:', input.placeholder);
+            console.log('Value:', input.value);
+            console.log('Aria-label:', input.getAttribute('aria-label'));
+            console.log('Aria-labelledby:', input.getAttribute('aria-labelledby'));
+            console.log('Class list:', input.className);
+            
+            if (input.value) {
+              console.log('SKIPPING - Already has value');
+              return; 
+            }
+            
+            if (input.type === 'hidden' && !input.name?.startsWith('entry.')) {
+              console.log('SKIPPING - Hidden field (not Google Forms entry)');
+              return;
+            }
+            
+            let questionText = '';
+            let fieldName = input.name || input.id || '';
+            
+            if (fieldName.startsWith('entry.')) {
+              console.log('Processing Google Forms entry field:', fieldName);
+              
+              if (fieldMapping[fieldName]) {
+                questionText = fieldMapping[fieldName];
+                console.log('Using field mapping:', fieldName, '->', questionText);
+              } else {
+                let container = input.closest('[data-params*="question"], .Qr7Oae, .freebirdFormviewerViewItemsItem');
+                if (container) {
+                  questionText = container.textContent.toLowerCase();
+                  console.log('Found container text:', container.textContent);
+                }
+                
+                if (!questionText && input.getAttribute('aria-labelledby')) {
+                  const labelId = input.getAttribute('aria-labelledby');
+                  const labelElement = document.getElementById(labelId);
+                  if (labelElement) {
+                    questionText = labelElement.textContent.toLowerCase();
+                    console.log('Found aria-labelledby text:', labelElement.textContent);
+                  }
+                }
+                
+                if (!questionText && input.getAttribute('aria-label')) {
+                  questionText = input.getAttribute('aria-label').toLowerCase();
+                  console.log('Found aria-label text:', input.getAttribute('aria-label'));
+                }
+              }
+            } else {
+              console.log('Processing regular field:', fieldName);
+              const isGoogleForm = document.querySelector('.freebirdFormviewerViewFormContentWrapper, .quantumWizTextinputPaperinputInput, [jsname="YPqjbf"]');
+              console.log('Is Google Form detected:', !!isGoogleForm);
+              
+              if (isGoogleForm) {
+                console.log('Using Google Forms extraction method');
+                let container = input.closest('[data-params*="question"], .Qr7Oae, .freebirdFormviewerViewItemsItem, .M4DNQ');
+                if (container) {
+                  questionText = container.textContent.toLowerCase();
+                  console.log('Found Google Forms container text:', container.textContent);
+                }
+                
+                if (!questionText && input.getAttribute('aria-labelledby')) {
+                  const labelId = input.getAttribute('aria-labelledby');
+                  const labelElement = document.getElementById(labelId);
+                  if (labelElement) {
+                    questionText = labelElement.textContent.toLowerCase();
+                    console.log('Found Google Forms aria-labelledby text:', labelElement.textContent);
+                  }
+                }
+                
+                if (!questionText && input.getAttribute('aria-label')) {
+                  questionText = input.getAttribute('aria-label').toLowerCase();
+                  console.log('Found Google Forms aria-label text:', input.getAttribute('aria-label'));
+                }
+              }
+              console.log('Using regular field extraction method');
+              let labelText = '';
+              if (input.id) {
+                const label = document.querySelector(`label[for="${input.id}"]`);
+                if (label) {
+                  labelText = label.textContent.toLowerCase();
+                  console.log('Found label text:', label.textContent);
+                }
+              }
+              if (!labelText) {
+                const parentLabel = input.closest('label');
+                if (parentLabel) {
+                  labelText = parentLabel.textContent.toLowerCase();
+                  console.log('Found parent label text:', parentLabel.textContent);
+                }
+              }
+              
+              let placeholderText = '';
+              if (input.placeholder && !/^\d+$/.test(input.placeholder) && input.placeholder.length > 3) {
+                placeholderText = input.placeholder.toLowerCase();
+                console.log('Using meaningful placeholder:', input.placeholder);
+              } else {
+                console.log('Skipping placeholder (numeric or too short):', input.placeholder);
+              }
+              
+              questionText = [input.name, input.id, labelText, placeholderText, input.getAttribute('aria-label')]
+                .filter(Boolean).join(' ').toLowerCase();
+              
+              console.log('Final question text:', questionText);
+            }
+            
+            const fieldMappings = {
+              name: ['name', 'fullname', 'full-name', 'full_name', 'firstname', 'first-name', 'first_name', 'fname', 'given-name', 'given_name', 'user-name', 'username', 'your-name', 'applicant-name', 'student-name', 'person-name', 'contact-name', 'नाव'],
+              email: ['email', 'e-mail', 'mail', 'email-address', 'email_address', 'user-email', 'contact-email', 'your-email', 'emailaddress'],
+              phone: ['phone', 'tel', 'telephone', 'mobile', 'cell', 'contact', 'number', 'phone-number', 'phone_number', 'your-phone', 'contact-number', 'isme null hai'],
+              city: ['city', 'town', 'location', 'place', 'residence', 'hometown', 'current-city', 'your-city', 'city-name', 'live-in', 'based-in', 'from-city', 'student-city', 'kaha rehte ho', 'address', 'pata', 'ghar', 'sheher', 'pincode']
+            };
+            
+            console.log('Attempting to match with form data...');
+            Object.entries(formData).forEach(([fieldType, value]) => {
+              console.log('Checking field type:', fieldType, 'with value:', value);
+              const keywords = fieldMappings[fieldType] || [];
+              console.log('Keywords for', fieldType, ':', keywords);
+              
+              const isMatch = keywords.some(keyword => 
+                questionText.includes(keyword) || 
+                keyword.includes(questionText) ||
+                questionText.includes(fieldType)
+              );
+              
+              console.log('Is match:', isMatch);
+              
+              if (value && isMatch) {
+                console.log('MATCH FOUND! Filling field:', fieldType, 'with value:', value, 'for question text:', questionText);
+                input.value = value;
+                ['input', 'change', 'blur'].forEach(eventType => {
+                  input.dispatchEvent(new Event(eventType, { bubbles: true }));
+                });
+                filled++;
+              } else {
+                console.log(' No match for field type:', fieldType);
+              }
+            });
+          });
+          
+          console.log('Total fields filled:', filled);
+          return filled;
+        },
+        args: [form]
+      });
+      
+      const directFilledCount2 = directResult[0]?.result || 0;
+      const totalDirectFilled = directFilledCount + directFilledCount2;
+      
+      if (directFilledCount2 > 0) {
+        setStatus(`Direct matching completed! Total filled: ${totalDirectFilled} fields`);
+        return;
+      }
+      
+      setStatus("Direct matching failed, trying AI as fallback...");
       const result = await chrome.scripting.executeScript({
         target: { tabId },
         func: () => {
@@ -126,12 +364,21 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
       setStatus(`Analyzing ${result[0].result.length} form fields with AI...`);
       const mapping = await getAIFieldMapping(result[0].result);
       
+      let aiData = {};
       if (mapping && Object.keys(mapping).length > 0) {
         setStatus("AI mapping successful, filling remaining fields...");
-        const aiData = Object.fromEntries(
-          Object.entries(mapping).map(([fieldName, standardKey]) => [fieldName, form[standardKey] || ''])
+        aiData = Object.fromEntries(
+          Object.entries(mapping)
+            .filter(([fieldName, standardKey]) => standardKey && standardKey !== 'null' && standardKey !== null)
+            .map(([fieldName, standardKey]) => [fieldName, form[standardKey] || ''])
         );
+        
+        console.log('AI mapping result:', aiData);
+      } else {
+        setStatus("AI mapping failed, no more fields to fill");
+      }
 
+      if (Object.keys(aiData).length > 0) {
         try {
           const fillResult = await chrome.scripting.executeScript({
             target: { tabId },
@@ -147,6 +394,10 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
                 if (inputs.length === 0) {
                   const allInputs = document.querySelectorAll('input, textarea, select');
                   inputs = Array.from(allInputs).filter(input => {
+                    if (input.placeholder && input.placeholder.toLowerCase().includes(fieldName.toLowerCase())) {
+                      return true;
+                    }
+                    
                     let labelText = '';
                     if (input.id) {
                       const label = document.querySelector(`label[for="${input.id}"]`);
@@ -156,7 +407,10 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
                       const parentLabel = input.closest('label');
                       if (parentLabel) labelText = parentLabel.textContent.toLowerCase();
                     }
-                    return labelText.includes(fieldName.toLowerCase()) || fieldName.toLowerCase().includes(labelText);
+                    
+                    return labelText.includes(fieldName.toLowerCase()) || 
+                           fieldName.toLowerCase().includes(labelText) ||
+                           (input.placeholder && input.placeholder.toLowerCase().includes(fieldName.toLowerCase()));
                   });
                 }
                 
@@ -179,20 +433,20 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
           const totalFilled = directFilledCount + aiFilledCount;
           
           if (aiFilledCount > 0) {
-            setStatus(`Complete! Direct: ${directFilledCount}, AI: ${aiFilledCount} = ${totalFilled} total fields filled`);
+            setStatus(`Complete! Direct: ${totalDirectFilled}, AI: ${aiFilledCount} = ${totalDirectFilled + aiFilledCount} total fields filled`);
           } else {
-            setStatus(`Complete! Direct matching filled ${directFilledCount} field(s), AI found no additional matches`);
+            setStatus(`Complete! Direct matching filled ${totalDirectFilled} field(s), AI found no additional matches`);
           }
         } catch (error) {
           console.error('AI field filling failed:', error);
-          setStatus(`Complete! Direct matching filled ${directFilledCount} field(s), AI filling failed`);
+          setStatus(`Complete! Direct matching filled ${totalDirectFilled} field(s), AI filling failed`);
         }
       } else {
-        setStatus(`Complete! Direct matching filled ${directFilledCount} field(s), AI found no additional mappings`);
+        setStatus(`Complete! Direct matching filled ${totalDirectFilled} field(s), AI found no additional mappings`);
       }
     } catch (error) {
       console.error('AI autofill error:', error);
-      setStatus(`Complete! Direct matching filled ${directFilledCount} field(s), AI analysis failed`);
+      setStatus(`Complete! Direct matching filled ${totalDirectFilled} field(s), AI analysis failed`);
     }
   };
 
@@ -217,9 +471,6 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
     }
   };
 
-  
-
-
 
   const injectContentScript=() =>{
     if (window.chrome?.tabs && window.chrome?.scripting) {
@@ -241,7 +492,7 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
 
     const handleClearData = () =>{
     if (window.confirm("Are you sure you want to clear all saved data?")) {
-      setForm(Object.fromEntries(FORM_FIELDS.map(field => [field, ''])));
+      setForm(Object.fromEntries(Object.keys(form).map(field => [field, ''])));
       if (window.chrome?.storage?.local) {
         window.chrome.storage.local.clear(() =>{
           setStatus("All data cleared!");
@@ -280,20 +531,62 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
       </div>
 
       <form className="autofill_form_fields" onSubmit={handleSubmit}>
-        {FORM_FIELDS.map(field => (
+        {Object.keys(form).map(field => (
           <div key={field} className="autofill_form_group">
             <label className="autofill_label">{field.charAt(0).toUpperCase() + field.slice(1)}</label>
             <input
-              type={FIELD_CONFIG[field].type}
+              type={FIELD_CONFIG[field]?.type || 'text'}
               name={field}
-              placeholder={FIELD_CONFIG[field].placeholder}
+              placeholder={FIELD_CONFIG[field]?.placeholder || `Enter your ${field}`}
               autoComplete="off"
               className="autofill_input"
               value={form[field]}
               onChange={handleChange}
             />
+            {!FORM_FIELDS.includes(field) && (
+              <button 
+                type="button" 
+                onClick={() => removeField(field)}
+                style={{
+                  background: '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  minWidth: '60px'
+                }}
+              >
+                Delete
+              </button>
+            )}
           </div>
         ))}
+
+        <div className="autofill_form_group">
+          <button 
+            type="button" 
+            onClick={addNewField}
+            style={{
+              background: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              padding: '10px 15px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              width: '100%',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            <span style={{ fontSize: '18px' }}>+</span>
+            Add New Field
+          </button>
+        </div>
 
         <div className="autofill_button_row">
           <button className="autofill_save_btn btn" type="submit">Save</button>
@@ -330,7 +623,7 @@ function injectAutofillScript() {
         name: ['name', 'fullname', 'full-name', 'full_name', 'firstname', 'first-name', 'first_name', 'fname', 'given-name', 'given_name', 'user-name', 'username', 'your-name', 'applicant-name', 'student-name', 'person-name', 'contact-name'],
         email: ['email', 'e-mail', 'mail', 'email-address', 'email_address', 'user-email', 'contact-email', 'your-email', 'emailaddress'],
         phone: ['phone', 'tel', 'telephone', 'mobile', 'cell', 'contact', 'number', 'phone-number', 'phone_number', 'your-phone', 'contact-number'],
-        city: ['city', 'town', 'location', 'place', 'residence', 'hometown', 'current-city', 'your-city', 'city-name', 'live-in', 'based-in', 'from-city', 'student-city']
+        city: ['city', 'town', 'location', 'place', 'residence', 'hometown', 'current-city', 'your-city', 'city-name', 'live-in', 'based-in', 'from-city', 'student-city', 'kaha rehte ho', 'address', 'pata', 'ghar', 'sheher']
       };
     }
 
@@ -393,22 +686,51 @@ function injectAutofillScript() {
     }
 
     fillGoogleForms(data) {
-      const googleInputs=document.querySelectorAll([
-        '.quantumWizTextinputPaperinputInput', '.quantumWizTextinputPapertextareaInput',
-        '.freebirdFormviewerViewItemsTextShortText input', '.freebirdFormviewerViewItemsTextLongText textarea', '[jsname="YPqjbf"]'
-      ].join(', '));
-
-      googleInputs.forEach(input =>{
+      const allInputs = document.querySelectorAll('input, textarea, select');
+      console.log('Total inputs found:', allInputs.length);
+      
+      allInputs.forEach(input => {
         if (input.value) return;
-        const container=input.closest('[data-params*="question"], .freebirdFormviewerViewItemsItem');
-        if (container) {
-          const questionText=container.textContent.toLowerCase();
-          Object.entries(data).forEach(([fieldType, value]) =>{
-            if (value && this.fieldMappings[fieldType]?.some(keyword => questionText.includes(keyword))) {
-              this.fillElement(input, value);
+        
+        if (input.type === 'hidden' && !input.name?.startsWith('entry.')) return;
+        
+        let questionText = '';
+        let fieldName = input.name || input.id || '';
+        
+        if (fieldName.startsWith('entry.')) {
+          let container = input.closest('[data-params*="question"], .Qr7Oae, .freebirdFormviewerViewItemsItem');
+          if (container) {
+            questionText = container.textContent.toLowerCase();
+          }
+          
+          if (!questionText && input.getAttribute('aria-labelledby')) {
+            const labelId = input.getAttribute('aria-labelledby');
+            const labelElement = document.getElementById(labelId);
+            if (labelElement) {
+              questionText = labelElement.textContent.toLowerCase();
             }
-          });
+          }
+          
+          if (!questionText && input.getAttribute('aria-label')) {
+            questionText = input.getAttribute('aria-label').toLowerCase();
+          }
+          
+          console.log('Google Form field:', fieldName, 'question:', questionText);
+        } else {
+          questionText = [input.name, input.id, input.placeholder, input.getAttribute('aria-label')]
+            .filter(Boolean).join(' ').toLowerCase();
         }
+        
+        Object.entries(data).forEach(([fieldType, value]) => {
+          if (value && this.fieldMappings[fieldType]?.some(keyword => 
+            questionText.includes(keyword) || 
+            keyword.includes(questionText) ||
+            this.fuzzyMatch(questionText, keyword)
+          )) {
+            console.log('Filling field:', fieldType, 'with value:', value, 'for question:', questionText);
+            this.fillElement(input, value);
+          }
+        });
       });
     }
   }
