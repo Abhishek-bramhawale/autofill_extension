@@ -147,30 +147,72 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
           console.log('=== GOOGLE FORM FIELD ANALYSIS ===');
           console.log('Total inputs found:', allInputs.length);
           
-          let googleFormsData = null;
-          try {
-            if (window.FB_PUBLIC_LOAD_DATA_) {
-              googleFormsData = window.FB_PUBLIC_LOAD_DATA_;
-              console.log('Found Google Forms metadata:', googleFormsData);
-            }
-          } catch (e) {
-            console.log('Could not access FB_PUBLIC_LOAD_DATA_');
-          }
-          
-          const fieldMapping = {};
-          if (googleFormsData && googleFormsData[1] && googleFormsData[1][1]) {
-            const formFields = googleFormsData[1][1];
-            formFields.forEach(field => {
-              if (field && field[0] && field[1]) {
-                const fieldId = field[0];
-                const fieldTitle = field[1];
-                fieldMapping[`entry.${fieldId}`] = fieldTitle.toLowerCase();
-                console.log(`Mapped entry.${fieldId} -> "${fieldTitle}"`);
+          // Use the improved Google Form field detection
+          function getGoogleFormFields() {
+            const formFields = [];
+            
+            // Select all input and textarea elements
+            const inputs = document.querySelectorAll("input, textarea");
+            
+            inputs.forEach((input) => {
+              // Traverse up to find the container for a form field
+              const container = input.closest("div[role='listitem']");
+              if (!container) return;
+              
+              // Get the label from the heading div
+              const heading = container.querySelector("div[role='heading']");
+              const label = heading?.textContent?.trim();
+              
+              if (label) {
+                formFields.push({
+                  label,
+                  type: input.type || input.tagName.toLowerCase(),
+                  element: input
+                });
               }
             });
-          } else {
-            console.log('Could not parse Google Forms metadata structure');
+            
+            return formFields;
           }
+          
+          const googleFormFields = getGoogleFormFields();
+          console.log("Detected Google Form Fields:", googleFormFields);
+          
+          const fieldMappings = {
+            name: ['name', 'fullname', 'full-name', 'full_name', 'firstname', 'first-name', 'first_name', 'fname', 'given-name', 'given_name', 'user-name', 'username', 'your-name', 'applicant-name', 'student-name', 'person-name', 'contact-name', 'नाव'],
+            email: ['email', 'e-mail', 'mail', 'email-address', 'email_address', 'user-email', 'contact-email', 'your-email', 'emailaddress'],
+            phone: ['phone', 'tel', 'telephone', 'mobile', 'cell', 'contact', 'number', 'phone-number', 'phone_number', 'your-phone', 'contact-number', 'isme null hai', 'mobile number'],
+            city: ['city', 'town', 'location', 'place', 'residence', 'hometown', 'current-city', 'your-city', 'city-name', 'live-in', 'based-in', 'from-city', 'student-city', 'kaha rehte ho', 'address', 'pata', 'ghar', 'sheher', 'pincode']
+          };
+          
+          googleFormFields.forEach(({ label, element }) => {
+            console.log(`Processing Google Form field: "${label}"`);
+            
+            Object.entries(formData).forEach(([fieldType, value]) => {
+              console.log('Checking field type:', fieldType, 'with value:', value);
+              const keywords = fieldMappings[fieldType] || [];
+              console.log('Keywords for', fieldType, ':', keywords);
+              
+              const isMatch = keywords.some(keyword => 
+                label.toLowerCase().includes(keyword) || 
+                keyword.includes(label.toLowerCase()) ||
+                label.toLowerCase().includes(fieldType)
+              );
+              
+              console.log('Is match:', isMatch);
+              
+              if (value && isMatch) {
+                console.log('MATCH FOUND! Filling Google Form field:', fieldType, 'with value:', value, 'for label:', label);
+                element.value = value;
+                ['input', 'change', 'blur'].forEach(eventType => {
+                  element.dispatchEvent(new Event(eventType, { bubbles: true }));
+                });
+                filled++;
+              } else {
+                console.log(' No match for field type:', fieldType);
+              }
+            });
+          });
           
           allInputs.forEach((input, index) => {
             console.log(`\n--- Field ${index + 1} ---`);
