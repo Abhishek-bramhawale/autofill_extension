@@ -32,7 +32,11 @@ function fillMappedAutofillFields(data) {
     
     inputs.forEach(el => {
       if (!el.value?.trim()) {
-        el.value = value;
+        if (fieldName === 'dob') {
+          fillDateElement(el, value);
+        } else {
+          el.value = value;
+        }
         ['input', 'change', 'blur'].forEach(eventType => {
           el.dispatchEvent(new Event(eventType, { bubbles: true }));
         });
@@ -41,7 +45,46 @@ function fillMappedAutofillFields(data) {
     });
   });
   
+  filled += fillSelectOptions(data);
+  
   return filled;
+}
+
+function fillDateElement(element, value) {
+  try {
+    if (element.type === 'date' || element.type === 'datetime-local') {
+      element.value = value;
+    } else {
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        element.value = date.toLocaleDateString();
+      } else {
+        element.value = value;
+      }
+    }
+  } catch (error) {
+    console.error('Error filling date element:', error);
+    element.value = value;
+  }
+}
+
+
+
+function getAssociatedLabelText(element) {
+  let labelText = '';
+  if (element.id) {
+    const label = document.querySelector(`label[for="${element.id}"]`);
+    if (label) labelText += ' ' + label.textContent;
+  }
+  const parentLabel = element.closest('label');
+  if (parentLabel) labelText += ' ' + parentLabel.textContent;
+  return labelText.trim();
+}
+
+function fuzzyMatch(text, keyword) {
+  const cleanText = text.replace(/[^a-zA-Z0-9]/g, '');
+  const cleanKeyword = keyword.replace(/[^a-zA-Z0-9]/g, '');
+  return cleanText.includes(cleanKeyword);
 }
 
 function getFormFieldsMetadata() {

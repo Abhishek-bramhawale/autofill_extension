@@ -2,12 +2,13 @@ import './App.css'
 
 import { useEffect, useState } from "react";
 
-const FORM_FIELDS =['name', 'phone', 'city', 'email'];
+const FORM_FIELDS =['name', 'phone', 'city', 'email', 'dob'];
 const FIELD_CONFIG= {
   name: { type: 'text', placeholder:'Enter your name'},
   phone: { type:'tel',placeholder: 'Enter your phone number' },
-  city: { type:'text',placeholder:'Enter your city'},
-  email:{ type: 'email', placeholder:'Enter your email address' }
+  // city: { type:'text',placeholder:'Enter your city'},
+  email:{ type: 'email', placeholder:'Enter your email address' },
+  dob: { type: 'date', placeholder:'Select your date of birth' }
 };
 
 function App(){
@@ -147,19 +148,15 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
           console.log('=== GOOGLE FORM FIELD ANALYSIS ===');
           console.log('Total inputs found:', allInputs.length);
           
-          // Use the improved Google Form field detection
           function getGoogleFormFields() {
             const formFields = [];
             
-            // Select all input and textarea elements
             const inputs = document.querySelectorAll("input, textarea");
             
             inputs.forEach((input) => {
-              // Traverse up to find the container for a form field
               const container = input.closest("div[role='listitem']");
               if (!container) return;
               
-              // Get the label from the heading div
               const heading = container.querySelector("div[role='heading']");
               const label = heading?.textContent?.trim();
               
@@ -182,7 +179,8 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
             name: ['name', 'fullname', 'full-name', 'full_name', 'firstname', 'first-name', 'first_name', 'fname', 'given-name', 'given_name', 'user-name', 'username', 'your-name', 'applicant-name', 'student-name', 'person-name', 'contact-name', 'नाव'],
             email: ['email', 'e-mail', 'mail', 'email-address', 'email_address', 'user-email', 'contact-email', 'your-email', 'emailaddress'],
             phone: ['phone', 'tel', 'telephone', 'mobile', 'cell', 'contact', 'number', 'phone-number', 'phone_number', 'your-phone', 'contact-number', 'isme null hai', 'mobile number'],
-            city: ['city', 'town', 'location', 'place', 'residence', 'hometown', 'current-city', 'your-city', 'city-name', 'live-in', 'based-in', 'from-city', 'student-city', 'kaha rehte ho', 'address', 'pata', 'ghar', 'sheher', 'pincode']
+            city: ['city', 'town', 'location', 'place', 'residence', 'hometown', 'current-city', 'your-city', 'city-name', 'live-in', 'based-in', 'from-city', 'student-city', 'kaha rehte ho', 'address', 'pata', 'ghar', 'sheher', 'pincode'],
+            dob: ['dob', 'date-of-birth', 'date_of_birth', 'birthdate', 'birth-date', 'birth_date', 'dateofbirth', 'birthday', 'birth-day', 'birth_day', 'age', 'date', 'born', 'birth', 'जन्म तिथि', 'जन्मदिन']
           };
           
           googleFormFields.forEach(({ label, element }) => {
@@ -328,7 +326,8 @@ const [form, setForm]=useState(Object.fromEntries(FORM_FIELDS.map(field => [fiel
               name: ['name', 'fullname', 'full-name', 'full_name', 'firstname', 'first-name', 'first_name', 'fname', 'given-name', 'given_name', 'user-name', 'username', 'your-name', 'applicant-name', 'student-name', 'person-name', 'contact-name', 'नाव'],
               email: ['email', 'e-mail', 'mail', 'email-address', 'email_address', 'user-email', 'contact-email', 'your-email', 'emailaddress'],
               phone: ['phone', 'tel', 'telephone', 'mobile', 'cell', 'contact', 'number', 'phone-number', 'phone_number', 'your-phone', 'contact-number', 'isme null hai'],
-              city: ['city', 'town', 'location', 'place', 'residence', 'hometown', 'current-city', 'your-city', 'city-name', 'live-in', 'based-in', 'from-city', 'student-city', 'kaha rehte ho', 'address', 'pata', 'ghar', 'sheher', 'pincode']
+              city: ['city', 'town', 'location', 'place', 'residence', 'hometown', 'current-city', 'your-city', 'city-name', 'live-in', 'based-in', 'from-city', 'student-city', 'kaha rehte ho', 'address', 'pata', 'ghar', 'sheher', 'pincode'],
+              dob: ['dob', 'date-of-birth', 'date_of_birth', 'birthdate', 'birth-date', 'birth_date', 'dateofbirth', 'birthday', 'birth-day', 'birth_day', 'age', 'date', 'born', 'birth', 'जन्म तिथि', 'जन्मदिन']
             };
             
             console.log('Attempting to match with form data...');
@@ -665,7 +664,8 @@ function injectAutofillScript() {
         name: ['name', 'fullname', 'full-name', 'full_name', 'firstname', 'first-name', 'first_name', 'fname', 'given-name', 'given_name', 'user-name', 'username', 'your-name', 'applicant-name', 'student-name', 'person-name', 'contact-name'],
         email: ['email', 'e-mail', 'mail', 'email-address', 'email_address', 'user-email', 'contact-email', 'your-email', 'emailaddress'],
         phone: ['phone', 'tel', 'telephone', 'mobile', 'cell', 'contact', 'number', 'phone-number', 'phone_number', 'your-phone', 'contact-number'],
-        city: ['city', 'town', 'location', 'place', 'residence', 'hometown', 'current-city', 'your-city', 'city-name', 'live-in', 'based-in', 'from-city', 'student-city', 'kaha rehte ho', 'address', 'pata', 'ghar', 'sheher']
+        city: ['city', 'town', 'location', 'place', 'residence', 'hometown', 'current-city', 'your-city', 'city-name', 'live-in', 'based-in', 'from-city', 'student-city', 'kaha rehte ho', 'address', 'pata', 'ghar', 'sheher'],
+        dob: ['dob', 'date-of-birth', 'date_of_birth', 'birthdate', 'birth-date', 'birth_date', 'dateofbirth', 'birthday', 'birth-day', 'birth_day', 'age', 'date', 'born', 'birth', 'जन्म तिथि', 'जन्मदिन']
       };
     }
 
@@ -674,12 +674,28 @@ function injectAutofillScript() {
       Object.entries(data).forEach(([fieldType, value]) =>{
         if (value?.trim() && this.fillField(fieldType, value.trim())) totalFilled++;
       });
+      
+      const selectFilled = this.fillSelectOptions(data);
+      totalFilled += selectFilled;
+      
       this.fillGoogleForms(data);
       return { success: true, filledFields: totalFilled };
     }
 
     fillField(fieldType, value) {
       const keywords=this.fieldMappings[fieldType] || [];
+      
+      if (fieldType === 'dob') {
+        const dateSelectors = ['input[type="date"]', 'input[type="datetime-local"]', 'input[type="text"][placeholder*="date"]', 'input[type="text"][placeholder*="birth"]'];
+        for (const selector of dateSelectors) {
+          for (const element of document.querySelectorAll(selector)) {
+            if (this.matchesField(element, keywords) && !element.value && this.fillDateElement(element, value)) {
+              return true;
+            }
+          }
+        }
+      }
+      
       const selectors=['input[type="text"]', 'input[type="email"]', 'input[type="tel"]', 'input[type="number"]', 'input:not([type])', 'textarea'];
       
       for (const selector of selectors) {
@@ -727,6 +743,113 @@ function injectAutofillScript() {
       }
     }
 
+    fillDateElement(element, value) {
+      try {
+        if (element.type === 'date' || element.type === 'datetime-local') {
+          element.value = value;
+        } else {
+          const date = new Date(value);
+          if (!isNaN(date.getTime())) {
+            element.value = date.toLocaleDateString();
+          } else {
+            element.value = value;
+          }
+        }
+        ['input', 'change', 'blur'].forEach(eventType => element.dispatchEvent(new Event(eventType, { bubbles: true })));
+        element.style.backgroundColor='#e8f5e8';
+        setTimeout(() => element.style.backgroundColor='', 1000);
+        return true;
+      } catch (error) {
+        console.error('Error filling date element:', error);
+        return false;
+      }
+    }
+
+    fillSelectOptions(data) {
+      let filled = 0;
+      
+      this.fieldMappings.gender = ['gender', 'male', 'female', 'other', 'prefer not to say'];
+      
+      Object.entries(data).forEach(([fieldType, value]) => {
+        if (!value?.trim()) return;
+        
+        const keywords = this.fieldMappings[fieldType] || [];
+        const selects = document.querySelectorAll('select');
+        
+        selects.forEach(select => {
+          if (this.matchesField(select, keywords)) {
+            const options = Array.from(select.options);
+            const matchingOption = options.find(option => {
+              const optionText = option.text.toLowerCase();
+              const optionValue = option.value.toLowerCase();
+              const fieldValue = value.toLowerCase();
+              
+              // Case-insensitive matching for both text and value
+              return optionText === fieldValue || 
+                     optionValue === fieldValue ||
+                     optionText.includes(fieldValue) || 
+                     fieldValue.includes(optionText) ||
+                     optionValue.includes(fieldValue) ||
+                     fieldValue.includes(optionValue);
+            });
+            
+            if (matchingOption) {
+              select.value = matchingOption.value;
+              ['change', 'input'].forEach(eventType => {
+                select.dispatchEvent(new Event(eventType, { bubbles: true }));
+              });
+              select.style.backgroundColor = '#e8f5e8';
+              setTimeout(() => select.style.backgroundColor = '', 1000);
+              filled++;
+              console.log('Filled select:', select.name || select.id, 'with value:', matchingOption.value);
+            }
+          }
+        });
+      });
+      
+      if (filled === 0) {
+        const emptySelects = document.querySelectorAll('select');
+        emptySelects.forEach(select => {
+          if (select.value === '' || select.value === '0' || select.selectedIndex === 0) {
+            const options = Array.from(select.options);
+            if (options.length > 1) { // Skip if only has default option
+              Object.entries(data).forEach(([fieldType, value]) => {
+                if (!value?.trim()) return;
+                
+                const matchingOption = options.find(option => {
+                  const optionText = option.text.toLowerCase();
+                  const optionValue = option.value.toLowerCase();
+                  const fieldValue = value.toLowerCase();
+                  
+                  // Case-insensitive matching for both text and value
+                  return optionText === fieldValue || 
+                         optionValue === fieldValue ||
+                         optionText.includes(fieldValue) || 
+                         fieldValue.includes(optionText) ||
+                         optionValue.includes(fieldValue) ||
+                         fieldValue.includes(optionValue);
+                });
+                
+                if (matchingOption) {
+                  select.value = matchingOption.value;
+                  ['change', 'input'].forEach(eventType => {
+                    select.dispatchEvent(new Event(eventType, { bubbles: true }));
+                  });
+                  select.style.backgroundColor = '#e8f5e8';
+                  setTimeout(() => select.style.backgroundColor = '', 1000);
+                  filled++;
+                  console.log('Filled empty select:', select.name || select.id, 'with value:', matchingOption.value);
+                  return; 
+                }
+              });
+            }
+          }
+        });
+      }
+      
+      return filled;
+    }
+
     fillGoogleForms(data) {
       const allInputs = document.querySelectorAll('input, textarea, select');
       console.log('Total inputs found:', allInputs.length);
@@ -770,10 +893,122 @@ function injectAutofillScript() {
             this.fuzzyMatch(questionText, keyword)
           )) {
             console.log('Filling field:', fieldType, 'with value:', value, 'for question:', questionText);
-            this.fillElement(input, value);
+            
+            if (fieldType === 'dob') {
+              this.fillDateElement(input, value);
+            } else {
+              this.fillElement(input, value);
+            }
           }
         });
       });
+      
+      this.fillGoogleFormsSelectOptions(data);
+    }
+
+    fillGoogleFormsSelectOptions(data) {
+      let filled = 0;
+      
+      this.fieldMappings.gender = ['gender', 'male', 'female', 'other', 'prefer not to say'];
+      
+      const selects = document.querySelectorAll('select');
+      
+      selects.forEach(select => {
+        let questionText = '';
+        const container = select.closest('[data-params*="question"], .Qr7Oae, .freebirdFormviewerViewItemsItem');
+        
+        if (container) {
+          questionText = container.textContent.toLowerCase();
+        }
+        
+        if (!questionText && select.getAttribute('aria-labelledby')) {
+          const labelId = select.getAttribute('aria-labelledby');
+          const labelElement = document.getElementById(labelId);
+          if (labelElement) {
+            questionText = labelElement.textContent.toLowerCase();
+          }
+        }
+        
+        if (!questionText && select.getAttribute('aria-label')) {
+          questionText = select.getAttribute('aria-label').toLowerCase();
+        }
+        
+        Object.entries(data).forEach(([fieldType, value]) => {
+          if (value && this.fieldMappings[fieldType]?.some(keyword => 
+            questionText.includes(keyword) || 
+            keyword.includes(questionText) ||
+            this.fuzzyMatch(questionText, keyword)
+          )) {
+            const options = Array.from(select.options);
+            const matchingOption = options.find(option => {
+              const optionText = option.text.toLowerCase();
+              const optionValue = option.value.toLowerCase();
+              const fieldValue = value.toLowerCase();
+              
+              // Case-insensitive matching for both text and value
+              return optionText === fieldValue || 
+                     optionValue === fieldValue ||
+                     optionText.includes(fieldValue) || 
+                     fieldValue.includes(optionText) ||
+                     optionValue.includes(fieldValue) ||
+                     fieldValue.includes(optionValue);
+            });
+            
+            if (matchingOption) {
+              select.value = matchingOption.value;
+              ['change', 'input'].forEach(eventType => {
+                select.dispatchEvent(new Event(eventType, { bubbles: true }));
+              });
+              select.style.backgroundColor = '#e8f5e8';
+              setTimeout(() => select.style.backgroundColor = '', 1000);
+              filled++;
+              console.log('Filled Google Form select:', select.name || select.id, 'with value:', matchingOption.value);
+            }
+          }
+        });
+      });
+      
+      if (filled === 0) {
+        const emptySelects = document.querySelectorAll('select');
+        emptySelects.forEach(select => {
+          if (select.value === '' || select.value === '0' || select.selectedIndex === 0) {
+            const options = Array.from(select.options);
+            if (options.length > 1) { // Skip if only has default option
+              Object.entries(data).forEach(([fieldType, value]) => {
+                if (!value?.trim()) return;
+                
+                const matchingOption = options.find(option => {
+                  const optionText = option.text.toLowerCase();
+                  const optionValue = option.value.toLowerCase();
+                  const fieldValue = value.toLowerCase();
+                  
+                  // Case-insensitive matching for both text and value
+                  return optionText === fieldValue || 
+                         optionValue === fieldValue ||
+                         optionText.includes(fieldValue) || 
+                         fieldValue.includes(optionText) ||
+                         optionValue.includes(fieldValue) ||
+                         fieldValue.includes(optionValue);
+                });
+                
+                if (matchingOption) {
+                  select.value = matchingOption.value;
+                  ['change', 'input'].forEach(eventType => {
+                    select.dispatchEvent(new Event(eventType, { bubbles: true }));
+                  });
+                  select.style.backgroundColor = '#e8f5e8';
+                  setTimeout(() => select.style.backgroundColor = '', 1000);
+                  filled++;
+                  console.log('Filled empty Google Form select:', select.name || select.id, 'with value:', matchingOption.value);
+                  return; 
+                }
+              });
+            }
+          }
+        });
+      }
+      
+      return filled;
     }
   }
 
